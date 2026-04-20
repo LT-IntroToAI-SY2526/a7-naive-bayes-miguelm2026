@@ -3,24 +3,9 @@ from typing import Tuple, List, Dict
 
 
 class BayesClassifier:
-    """A simple BayesClassifier implementation
-
-    Attributes:
-        pos_freqs - dictionary of frequencies of positive words
-        neg_freqs - dictionary of frequencies of negative words
-        pos_filename - name of positive dictionary cache file
-        neg_filename - name of positive dictionary cache file
-        training_data_directory - relative path to training directory
-        neg_file_prefix - prefix of negative reviews
-        pos_file_prefix - prefix of positive reviews
-    """
+    """A simple BayesClassifier implementation"""
 
     def __init__(self):
-        """Constructor initializes and trains the Naive Bayes Sentiment Classifier. If a
-        cache of a trained classifier is stored in the current folder it is loaded,
-        otherwise the system will proceed through training.  Once constructed the
-        classifier is ready to classify input text."""
-        # initialize attributes
         self.pos_freqs: Dict[str, int] = {}
         self.neg_freqs: Dict[str, int] = {}
         self.pos_filename: str = "pos.dat"
@@ -29,7 +14,6 @@ class BayesClassifier:
         self.neg_file_prefix: str = "movies-1"
         self.pos_file_prefix: str = "movies-5"
 
-        # check if both cached classifiers exist within the current directory
         if os.path.isfile(self.pos_filename) and os.path.isfile(self.neg_filename):
             print("Data files found - loading to use cached values...")
             self.pos_freqs = self.load_dict(self.pos_filename)
@@ -39,128 +23,60 @@ class BayesClassifier:
             self.train()
 
     def train(self) -> None:
-        """Trains the Naive Bayes Sentiment Classifier
-
-        Train here means generates `pos_freq/neg_freq` dictionaries with frequencies of
-        words in corresponding positive/negative reviews
-        """
-        # get the list of file names from the training data directory
-        # os.walk returns a generator (feel free to Google "python generators" if you're
-        # curious to learn more, next gets the first value from this generator or the
-        # provided default `(None, None, [])` if the generator has no values)
         _, __, files = next(os.walk(self.training_data_directory), (None, None, []))
         if not files:
-            raise RuntimeError("Couldn't find path " + self.training_data_directory)
+            raise RuntimeError(f"Couldn't find path {self.training_data_directory}")
 
-        file_list = list(files)
+        for index, filename in enumerate(files, 1):
+            print(f"Training on file {index} of {len(files)}: {filename}")
 
-        total_files = len(file_list)
-
-        for index, filename in enumerate(file_list, 1):  
-            print("Training on file " + str(index) +
-                " of " + str(total_files) + ": " + filename)
-
-            is_pos = filename.startswith(self.pos_file_prefix)
-            is_neg = filename.startswith(self.neg_file_prefix)
-
-            if not is_pos and not is_neg:
-                continue
-
-            filepath = os.path.join(self.training_data_directory, filename)
-            text = self.load_file(filepath)
+            text = self.load_file(os.path.join(self.training_data_directory, filename))
             tokens = self.tokenize(text)
 
-            if is_pos:
+            if filename.startswith(self.pos_file_prefix):
                 self.update_dict(tokens, self.pos_freqs)
-            elif is_neg:
+            elif filename.startswith(self.neg_file_prefix):
                 self.update_dict(tokens, self.neg_freqs)
 
         self.save_dict(self.pos_freqs, self.pos_filename)
         self.save_dict(self.neg_freqs, self.neg_filename)
 
     def classify(self, text: str) -> str:
-        """Classifies given text as positive, or negative from calculating the
-        most likely document class to which the target string belongs
-
-        Args:
-            text - text to classify
-
-        Returns:
-            classification, either positive, or negative
-        """
-        # tokenize input text
         tokens = self.tokenize(text)
 
         pos_prob = 0.0
         neg_prob = 0.0
 
-        total_pos = sum(self.pos_freqs.values())
-        total_neg = sum(self.neg_freqs.values())
+        pos_total = sum(self.pos_freqs.values())
+        neg_total = sum(self.neg_freqs.values())
 
         vocab = set(list(self.pos_freqs.keys()) + list(self.neg_freqs.keys()))
         V = len(vocab)
 
-        for token in tokens:
-            pos_count = self.pos_freqs.get(token, 0)
-            neg_count = self.neg_freqs.get(token, 0)
+        for t in tokens:
+            pos_count = self.pos_freqs.get(t, 0)
+            neg_count = self.neg_freqs.get(t, 0)
 
-            pos_likelihood = math.log((pos_count + 1) / (total_pos + V))
-            neg_likelihood = math.log((neg_count + 1) / (total_neg + V))
+            pos_prob += math.log((pos_count + 1) / (pos_total + V))
+            neg_prob += math.log((neg_count + 1) / (neg_total + V))
 
-            pos_prob += pos_likelihood
-            neg_prob += neg_likelihood
-
-
-        if pos_prob > neg_prob:
-            return "positive"
-        else:
-            return "negative"
+        return "positive" if pos_prob > neg_prob else "negative"
 
     def load_file(self, filepath: str) -> str:
-        """Loads text of given file
-
-        Args:
-            filepath - relative path to file to load
-
-        Returns:
-            text of the given file
-        """
         with open(filepath, "r", encoding='utf8') as f:
             return f.read()
 
     def save_dict(self, dict: Dict, filepath: str) -> None:
-        """Pickles given dictionary to a file with the given name
-
-        Args:
-            dict - a dictionary to pickle
-            filepath - relative path to file to save
-        """
         print(f"Dictionary saved to file: {filepath}")
         with open(filepath, "wb") as f:
             pickle.Pickler(f).dump(dict)
 
     def load_dict(self, filepath: str) -> Dict:
-        """Loads pickled dictionary stored in given file
-
-        Args:
-            filepath - relative path to file to load
-
-        Returns:
-            dictionary stored in given file
-        """
         print(f"Loading dictionary from file: {filepath}")
         with open(filepath, "rb") as f:
             return pickle.Unpickler(f).load()
 
     def tokenize(self, text: str) -> List[str]:
-        """Splits given text into a list of the individual tokens in order
-
-        Args:
-            text - text to tokenize
-
-        Returns:
-            tokens of given text in order
-        """
         tokens = []
         token = ""
         for c in text:
@@ -183,30 +99,13 @@ class BayesClassifier:
         return tokens
 
     def update_dict(self, words: List[str], freqs: Dict[str, int]) -> None:
-        """Updates given (word -> frequency) dictionary with given words list
-
-        By updating we mean increment the count of each word in words in the dictionary.
-        If any word in words is not currently in the dictionary add it with a count of 1.
-        (if a word is in words multiple times you'll increment it as many times
-        as it appears)
-
-        Args:
-            words - list of tokens to update frequencies of
-            freqs - dictionary of frequencies to update
-        """
-        # TODO: your work here
-        for word in words:
-            if word in freqs:
-                freqs[word] += 1
-            else:
-                freqs[word] = 1
-
+        for w in words:
+            freqs[w] = freqs.get(w, 0) + 1
 
 if __name__ == "__main__":
     # uncomment the below lines once you've implemented `train` & `classify`
     b = BayesClassifier()
-    a_list_of_words = ["I", "really", "like", "this", "movie", ".", "I", "hope", \
-                        "you", "like", "it", "too"]
+    a_list_of_words = ["I", "really", "like", "this", "movie", ".", "I", "hope", "you", "like", "it", "too"]
     a_dictionary = {}
     b.update_dict(a_list_of_words, a_dictionary)
     assert a_dictionary["I"] == 2, "update_dict test 1"
@@ -244,6 +143,7 @@ if __name__ == "__main__":
     print(f"P('terrible'| pos) {(b.pos_freqs['terrible']+1)/pos_denominator}")
     print(f"P('terrible'| neg) {(b.neg_freqs['terrible']+1)/neg_denominator}")
 
+    # # uncomment the below lines once you've implemented `classify`
     print("\nThe following should all be positive.")
     print(b.classify('I love computer science'))
     print(b.classify('this movie is fantastic'))
